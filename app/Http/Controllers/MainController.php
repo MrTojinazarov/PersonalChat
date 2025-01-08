@@ -47,17 +47,47 @@ class MainController extends Controller
 
     public function sendMessage(Request $request, $chat_id)
     {
-        $request->validate([
-            'message' => 'required|string|max:1000',
+
+        $validated = $request->validate([
+            'message' => 'nullable|string|max:1000',
+            'file' => [
+                'nullable',
+                'file',
+                'mimes:jpeg,png,jpg,gif,mp4,mov,avi,pdf,docx,xlsx,zip',
+                'max:10240',
+            ],
         ]);
+
+        $filePath = null;
+        if ($request->hasFile('file')) {
+            $file = $request->file('file');
+    
+            if (in_array($file->extension(), ['jpeg', 'png', 'jpg', 'gif'])) {
+                $folder = 'images';
+            } elseif (in_array($file->extension(), ['mp4', 'mov', 'avi'])) {
+                $folder = 'videos';
+            } else {
+                $folder = 'files';
+            }
+    
+            $file_name = time() . '-' . uniqid() . '.' . $file->getClientOriginalExtension();
+    
+            $destinationPath = public_path($folder);
+    
+            $file->move($destinationPath, $file_name);
+    
+            $filePath = $folder . '/' . $file_name;
+
+            $validated['file'] = $filePath;
+        }
 
         $message = Messages::create([
             'chat_id' => $chat_id,
             'message' => $request->message,
+            'file' => $filePath,
         ]);
 
-        // dd($message);
-        broadcast(new MessageSent($message));
+        broadcast(new MessageSent($message))->toOthers();
         
         return back();
     }
